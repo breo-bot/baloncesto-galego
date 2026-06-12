@@ -1,6 +1,8 @@
 const BASE_URL = 'https://appaficion' + 'feg' + 'aba.gesdeportiva.es';
 const COOKIE_DAYS = 365;
 const PAGE_SIZE = 50;
+const INITIAL_MATCH_SEARCH_PAGE_CAP = 512;
+const MAX_MATCH_SEARCH_PAGE_CAP = 8192;
 const STORAGE_PREFIX = 'baloncesto_galego';
 
 const searchConfig = {
@@ -15,6 +17,7 @@ const state = {
   view: 'home',
   auth: readAuth(),
   detailCache: new Map(),
+  searchCache: new Map(),
   currentDetailItem: null,
   currentDetailData: null,
   currentQuery: '',
@@ -132,6 +135,7 @@ function clearAuth() {
   [`${STORAGE_PREFIX}_favorite_players`, `${STORAGE_PREFIX}_favorite_teams`, `${STORAGE_PREFIX}_favorite_matches`].forEach((key) => localStorage.removeItem(key));
   state.auth = readAuth();
   state.detailCache.clear();
+  state.searchCache.clear();
   renderIdentity();
   renderMessage('Identidade e cache local borradas. A app volverá rexistrarse cando sexa necesario.');
 }
@@ -373,7 +377,19 @@ async function runSearch(type, query, skip, title) {
     return;
   }
   await ensureAuth();
-  updateSearchResults([], 'Buscando...', title, { type, query, skip });
+  updateSearchResults([], type === 'match' ? 'Buscando os partidos máis recentes...' : 'Buscando...', title, { type, query, skip });
+  const result = type === 'match'
+    ? await loadSortedMatchSearch(config, query, skip)
+    : await loadSearchPage(type, config, query, skip);
+  updateSearchResults(result.items, `Non se atoparon ${config.label.toLowerCase()}.`, title, {
+    type,
+    query,
+    skip,
+    hasNext: result.hasNext,
+  });
+}
+
+async function loadSearchPage(type, config, query, skip) {
   const response = await post('/v2/busqueda.ashx', {
     accion: config.action,
     ...config.extra,
@@ -381,12 +397,82 @@ async function runSearch(type, query, skip, title) {
     skip: String(skip),
   });
   const items = sortedBrowseItems(normalize(firstArray(response, config.keys), type), type);
-  updateSearchResults(items, `Non se atoparon ${config.label.toLowerCase()}.`, title, {
-    type,
-    query,
-    skip,
-    hasNext: items.length >= PAGE_SIZE,
+  return { items, hasNext: items.length >= PAGE_SIZE };
+}
+
+async function loadSortedMatchSearch(config, query, skip) {
+  const cacheKey = `match:${query}`;
+  if (!state.searchCache.has(cacheKey)) {
+    state.searchCache.set(cacheKey, { pages: new Map(), lastPageIndex: null });
+  }
+  const cache = state.searchCache.get(cacheKey);
+  const lastPageIndex = await resolveLastMatchPageIndex(cache, config, query);
+  const start = cleanSkip(skip);
+  const needed = start + PAGE_SIZE;
+  const matches = [];
+  for (let page = lastPageIndex; page >= 0 && matches.length < needed; page -= 1) {
+    matches.push(...await loadMatchSearchPage(cache, config, query, page));
+  }
+  const allItems = sortRecordsMostRecent(mergeById([], matches));
+  const lastPageItems = await loadMatchSearchPage(cache, config, query, lastPageIndex);
+  const totalKnown = Math.max(0, lastPageIndex) * PAGE_SIZE + lastPageItems.length;
+  return {
+    items: allItems.slice(start, start + PAGE_SIZE),
+    hasNext: start + PAGE_SIZE < totalKnown,
+  };
+}
+
+async function resolveLastMatchPageIndex(cache, config, query) {
+  if (cache.lastPageIndex !== null) return cache.lastPageIndex;
+  const firstPage = await loadMatchSearchPage(cache, config, query, 0);
+  if (firstPage.length < PAGE_SIZE) {
+    cache.lastPageIndex = firstPage.length ? 0 : -1;
+    return cache.lastPageIndex;
+  }
+
+  let low = 0;
+  let high = INITIAL_MATCH_SEARCH_PAGE_CAP - 1;
+  while (high < MAX_MATCH_SEARCH_PAGE_CAP) {
+    const highPageItems = await loadMatchSearchPage(cache, config, query, high);
+    if (highPageItems.length < PAGE_SIZE) break;
+    low = high;
+    high = Math.min(high * 2, MAX_MATCH_SEARCH_PAGE_CAP - 1);
+    if (high === low) {
+      cache.lastPageIndex = high;
+      return cache.lastPageIndex;
+    }
+  }
+
+  let firstNonFull = high;
+  let left = low + 1;
+  let right = high;
+  while (left <= right) {
+    const mid = Math.floor((left + right) / 2);
+    const pageItems = await loadMatchSearchPage(cache, config, query, mid);
+    if (pageItems.length < PAGE_SIZE) {
+      firstNonFull = mid;
+      right = mid - 1;
+    } else {
+      left = mid + 1;
+    }
+  }
+  const lastPageItems = await loadMatchSearchPage(cache, config, query, firstNonFull);
+  cache.lastPageIndex = lastPageItems.length ? firstNonFull : firstNonFull - 1;
+  return cache.lastPageIndex;
+}
+
+async function loadMatchSearchPage(cache, config, query, page) {
+  if (page < 0) return [];
+  if (cache.pages.has(page)) return cache.pages.get(page);
+  const response = await post('/v2/busqueda.ashx', {
+    accion: config.action,
+    ...config.extra,
+    texto: query,
+    skip: String(page * PAGE_SIZE),
   });
+  const items = normalize(firstArray(response, config.keys), 'match');
+  cache.pages.set(page, items);
+  return items;
 }
 
 function showSearchError(error) {
@@ -1982,10 +2068,13 @@ function sortRecordsMostRecent(rows = []) {
 
 function recordTimestamp(row) {
   const values = [
-    row?.Fecha,
+    row?.FechaHora,
+    row?.fechaHora,
+    row?.FechaHoraUTC,
+    row?.fechaHoraUTC,
     row?.FechaPartido,
     row?.fechaPartido,
-    row?.FechaHora,
+    row?.Fecha,
     row?.fecha,
     row?.fecha_hora,
     row?.FechaJornada,
