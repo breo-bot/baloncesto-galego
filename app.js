@@ -2004,8 +2004,8 @@ function recordTimestamp(row) {
 function parseTimestamp(value) {
   if (!value) return 0;
   const raw = String(value).trim();
-  const apiDate = raw.match(/\/Date\((\d+)\)\//);
-  if (apiDate) return Number(apiDate[1]);
+  const apiDate = parseApiDateTimestamp(raw);
+  if (apiDate !== null) return apiDate;
   const europeanDate = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   if (europeanDate) {
     const [, day, month, year] = europeanDate;
@@ -2121,14 +2121,21 @@ function readableDate(value) {
 function displayDate(value, includeTime = true) {
   if (!value) return '';
   const raw = String(value);
-  const apiDate = raw.match(/\/Date\((\d+)\)\//);
-  if (!apiDate && /\d{1,2}\/\d{1,2}\/\d{4}/.test(raw)) return raw;
-  const date = apiDate ? new Date(Number(apiDate[1])) : new Date(raw);
-  if (Number.isNaN(date.getTime())) return raw;
+  const apiDate = parseApiDateTimestamp(raw);
+  if (apiDate === null && /\d{1,2}\/\d{1,2}\/\d{4}/.test(raw)) return raw;
+  const date = apiDate !== null ? new Date(apiDate) : new Date(raw);
+  if (Number.isNaN(date.getTime())) return '';
   const datePart = new Intl.DateTimeFormat('gl-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
   if (!includeTime) return datePart;
   const timePart = new Intl.DateTimeFormat('gl-ES', { hour: '2-digit', minute: '2-digit' }).format(date);
   return `${datePart} ${timePart}`;
+}
+
+function parseApiDateTimestamp(value) {
+  const match = String(value || '').trim().match(/^\/Date\((-?\d+)(?:[+-]\d+)?\)\/$/);
+  if (!match) return null;
+  const timestamp = Number(match[1]);
+  return Number.isFinite(timestamp) ? timestamp : null;
 }
 
 function humanizeKey(key) {
