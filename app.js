@@ -2054,7 +2054,8 @@ function titleFor(item) {
 
 function summaryFor(item) {
   if (item.type === 'match') {
-    return [matchTeams(item), displayDate(item.Fecha || item.FechaPartido || item.fechaPartido, false), item.Categoria || item.NombreCategoria].filter(Boolean).join(' · ') || 'Partido';
+    const result = matchResultLabel(item, matchScoreObject(item, null));
+    return [matchDateLabel(item), item.Categoria || item.NombreCategoria, result !== '-' ? result : ''].filter(Boolean).join(' · ') || 'Partido';
   }
   return [item.Club || item.NombreClub, item.Categoria || item.NombreCategoria, item.Competicion || item.NombreCompeticion, item.Temporada].filter(Boolean).join(' · ') || 'Sen resumo dispoñible';
 }
