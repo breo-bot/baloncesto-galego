@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="gl">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+    <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+    <meta name="bingbot" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+    <meta name="GPTBot" content="noindex, nofollow">
+    <meta name="ChatGPT-User" content="noindex, nofollow">
+    <meta name="CCBot" content="noindex, nofollow">
+    <meta name="anthropic-ai" content="noindex, nofollow">
+    <meta name="ClaudeBot" content="noindex, nofollow">
+    <meta name="PerplexityBot" content="noindex, nofollow">
+    <title>Baloncesto Galego</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>Baloncesto Galego</h1>
+        <p>Consulta equipos, xogadores, competicións, clubs e partidos.</p>
+      </div>
+      <button id="identityBtn" type="button">Identidade</button>
+    </header>
+
+    <main class="app-shell">
+      <nav class="tabs" aria-label="Vistas principais">
+        <button class="tab active" type="button" data-view="home">Inicio</button>
+        <button class="tab" type="button" data-view="player">Xogadores</button>
+        <button class="tab" type="button" data-view="team">Equipos</button>
+        <button class="tab" type="button" data-view="club">Clubs</button>
+        <button class="tab" type="button" data-view="category">Categorías</button>
+        <button class="tab" type="button" data-view="match">Partidos</button>
+      </nav>
+
+      <section id="content" class="content"></section>
+    </main>
+
+    <dialog id="identityDialog">
+      <form method="dialog" class="identity-card">
+        <div class="dialog-heading">
+          <h2>Identidade da app</h2>
+          <button value="close" type="submit" class="icon-btn">x</button>
+        </div>
+        <p>A app crea unha identidade de dispositivo e gárdaa en cookies.</p>
+        <label>
+          UID
+          <input id="uidInput" autocomplete="off">
+        </label>
+        <div class="button-row">
+          <button id="registerBtn" type="button">Rexistrar</button>
+          <button id="clearBtn" type="button" class="secondary">Limpar</button>
+        </div>
+        <dl>
+          <dt>Estado</dt>
+          <dd id="identityStatus">Sen rexistrar</dd>
+          <dt>ID</dt>
+          <dd id="deviceIdView">-</dd>
+          <dt>Key</dt>
+          <dd id="keyView">-</dd>
+        </dl>
+      </form>
+    </dialog>
+
+    <script src="app.js?v=20260612-hide-playoff-ranking"></script>
+  </body>
+</html>

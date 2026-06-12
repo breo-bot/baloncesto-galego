@@ -1,0 +1,54 @@
+# Local workspaces and generated analysis
+worktrees/
+analysis/
+downloads/
+androguard.db
+fegaba.md
+migration-plan.md
+
+# Android/package artifacts
+*.apk
+*.xapk
+*.dex
+*.jar
+
+# Secrets and local configuration
+.env
+.env.*
+*.local
+cookies.txt
+secrets.*
+
+# Python
+__pycache__/
+*.py[cod]
+.python-version
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.rumdl_cache/
+
+# Node/frontend tooling
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+dist/
+build/
+.parcel-cache/
+.vite/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Logs
+*.log
