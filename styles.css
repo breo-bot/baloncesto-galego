@@ -107,6 +107,19 @@ p {
   padding: 14px;
 }
 
+.app-footer {
+  max-width: 980px;
+  margin: 10px 14px 24px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.app-footer a {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .tabs {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
