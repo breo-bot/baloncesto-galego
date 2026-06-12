@@ -4,6 +4,7 @@ const PAGE_SIZE = 50;
 const INITIAL_MATCH_SEARCH_PAGE_CAP = 512;
 const MAX_MATCH_SEARCH_PAGE_CAP = 8192;
 const STORAGE_PREFIX = 'baloncesto_galego';
+const MATCH_SEARCH_LAST_PAGE_PREFIX = `${STORAGE_PREFIX}_match_search_last_`;
 
 const searchConfig = {
   player: { label: 'Xogadores', action: 'buscarJugador', keys: ['jugadores'], extra: { nombre: '' }, listOnOpen: false },
@@ -133,6 +134,7 @@ function renderIdentity() {
 function clearAuth() {
   [`${STORAGE_PREFIX}_uid`, `${STORAGE_PREFIX}_id_dispositivo`, `${STORAGE_PREFIX}_key`, `${STORAGE_PREFIX}_ruta`].forEach(deleteCookie);
   [`${STORAGE_PREFIX}_favorite_players`, `${STORAGE_PREFIX}_favorite_teams`, `${STORAGE_PREFIX}_favorite_matches`].forEach((key) => localStorage.removeItem(key));
+  clearStoredMatchSearchCache();
   state.auth = readAuth();
   state.detailCache.clear();
   state.searchCache.clear();
@@ -424,22 +426,49 @@ async function loadSortedMatchSearch(config, query, skip) {
 
 async function resolveLastMatchPageIndex(cache, config, query) {
   if (cache.lastPageIndex !== null) return cache.lastPageIndex;
-  const firstPage = await loadMatchSearchPage(cache, config, query, 0);
-  if (firstPage.length < PAGE_SIZE) {
-    cache.lastPageIndex = firstPage.length ? 0 : -1;
+  const storedLastPageIndex = readStoredLastMatchPageIndex(query);
+  if (storedLastPageIndex !== null) {
+    cache.lastPageIndex = await resolveStoredLastMatchPageIndex(cache, config, query, storedLastPageIndex);
+    storeLastMatchPageIndex(query, cache.lastPageIndex);
     return cache.lastPageIndex;
   }
+  cache.lastPageIndex = await discoverLastMatchPageIndex(cache, config, query);
+  storeLastMatchPageIndex(query, cache.lastPageIndex);
+  return cache.lastPageIndex;
+}
 
-  let low = 0;
-  let high = INITIAL_MATCH_SEARCH_PAGE_CAP - 1;
+async function resolveStoredLastMatchPageIndex(cache, config, query, storedLastPageIndex) {
+  if (storedLastPageIndex < 0) return discoverLastMatchPageIndex(cache, config, query);
+
+  const nextPageItems = await loadMatchSearchPage(cache, config, query, storedLastPageIndex + 1);
+  if (nextPageItems.length) {
+    if (nextPageItems.length < PAGE_SIZE) return storedLastPageIndex + 1;
+    return findLastMatchPageIndex(cache, config, query, storedLastPageIndex + 1, Math.min((storedLastPageIndex + 1) * 2, MAX_MATCH_SEARCH_PAGE_CAP - 1));
+  }
+
+  const storedPageItems = await loadMatchSearchPage(cache, config, query, storedLastPageIndex);
+  if (storedPageItems.length) return storedLastPageIndex;
+
+  return discoverLastMatchPageIndex(cache, config, query);
+}
+
+async function discoverLastMatchPageIndex(cache, config, query) {
+  const firstPage = await loadMatchSearchPage(cache, config, query, 0);
+  if (firstPage.length < PAGE_SIZE) {
+    return firstPage.length ? 0 : -1;
+  }
+  return findLastMatchPageIndex(cache, config, query, 0, INITIAL_MATCH_SEARCH_PAGE_CAP - 1);
+}
+
+async function findLastMatchPageIndex(cache, config, query, low, high) {
+  high = Math.max(low + 1, Math.min(high, MAX_MATCH_SEARCH_PAGE_CAP - 1));
   while (high < MAX_MATCH_SEARCH_PAGE_CAP) {
     const highPageItems = await loadMatchSearchPage(cache, config, query, high);
     if (highPageItems.length < PAGE_SIZE) break;
     low = high;
     high = Math.min(high * 2, MAX_MATCH_SEARCH_PAGE_CAP - 1);
     if (high === low) {
-      cache.lastPageIndex = high;
-      return cache.lastPageIndex;
+      return high;
     }
   }
 
@@ -457,8 +486,7 @@ async function resolveLastMatchPageIndex(cache, config, query) {
     }
   }
   const lastPageItems = await loadMatchSearchPage(cache, config, query, firstNonFull);
-  cache.lastPageIndex = lastPageItems.length ? firstNonFull : firstNonFull - 1;
-  return cache.lastPageIndex;
+  return lastPageItems.length ? firstNonFull : firstNonFull - 1;
 }
 
 async function loadMatchSearchPage(cache, config, query, page) {
@@ -473,6 +501,53 @@ async function loadMatchSearchPage(cache, config, query, page) {
   const items = normalize(firstArray(response, config.keys), 'match');
   cache.pages.set(page, items);
   return items;
+}
+
+function matchSearchLastPageKey(query) {
+  return `${MATCH_SEARCH_LAST_PAGE_PREFIX}${hashString(query || '')}`;
+}
+
+function readStoredLastMatchPageIndex(query) {
+  try {
+    const raw = localStorage.getItem(matchSearchLastPageKey(query));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const lastPageIndex = Number(parsed?.lastPageIndex);
+    if (!Number.isInteger(lastPageIndex) || lastPageIndex < -1 || lastPageIndex >= MAX_MATCH_SEARCH_PAGE_CAP) return null;
+    return lastPageIndex;
+  } catch {
+    return null;
+  }
+}
+
+function storeLastMatchPageIndex(query, lastPageIndex) {
+  try {
+    localStorage.setItem(matchSearchLastPageKey(query), JSON.stringify({
+      lastPageIndex,
+      savedAt: Date.now(),
+    }));
+  } catch {
+    // Local storage can be unavailable in private or restricted browser contexts.
+  }
+}
+
+function clearStoredMatchSearchCache() {
+  try {
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith(MATCH_SEARCH_LAST_PAGE_PREFIX))
+      .forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // Ignore storage access errors; clearing identity should still work.
+  }
+}
+
+function hashString(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${value.length.toString(36)}_${(hash >>> 0).toString(36)}`;
 }
 
 function showSearchError(error) {
